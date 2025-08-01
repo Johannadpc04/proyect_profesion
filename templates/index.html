@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vestidor de Profesiones con IA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Vestidor de Profesiones con IA</h1>
+        <p>Sube una foto, elige una profesión y la IA editará la imagen.</p>
+        
+        <form action="/" method="post" enctype="multipart/form-data">
+            <label for="profession">Profesión:</label>
+            <input type="text" id="profession" name="profession" placeholder="Ej: policía, doctor, bombero" required>
+            
+            <input type="file" name="file" id="fileInput" accept="image/*" required>
+            <button type="submit">Generar Imagen</button>
+        </form>
+
+        {% if original_image_url %}
+            <div class="results">
+                <h2>Imagen Subida</h2>
+                <img src="{{ original_image_url }}" alt="Imagen Subida">
+            </div>
+        {% endif %}
+
+        {% if generated_image_url %}
+            <div class="results">
+                <h2>Imagen Generada por la IA</h2>
+                <img src="{{ generated_image_url }}" alt="Imagen Generada">
+            </div>
+        {% endif %}
+
+        {% if error_message %}
+            <div class="error-message">
+                <p>{{ error_message }}</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
