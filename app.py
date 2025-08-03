@@ -1,82 +1,52 @@
+import streamlit as st
 import os
-import requests
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from werkzeug.utils import secure_filename
+from PIL import Image
 from dotenv import load_dotenv
+import google.generativeai as genai
 
+# Cargar la API Key desde el archivo .env
 load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=GOOGLE_API_KEY)
 
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads/'
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+# Inicializar el modelo generativo de IA (Gemini 2.0 Flash)
+# Nota: "gemini-pro-vision" ha sido reemplazado por "gemini-2.0-flash"
+model = genai.GenerativeModel('gemini-2.0-flash-preview-image-generation')
 
-# *** AQUÍ PEGARÁS LA URL DE NGROK QUE TE DIO GOOGLE COLAB ***
-# Asegúrate de actualizar esta URL cada vez que reinicies el cuaderno de Colab.
-COLAB_API_URL = " https://69d7fdddde03.ngrok-free.app/generate_image"
+# --- Interfaz de usuario con Streamlit ---
+st.set_page_config(page_title="Gemini - Viste a una persona")
 
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+st.header("Viste a una persona con Gemini 📸")
+st.markdown("Sube una imagen y describe la profesión o vestimenta deseada para generar una nueva imagen.")
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    generated_image_url = None
-    original_image_url = None
-    error_message = None
+# Subir la imagen
+uploaded_file = st.file_uploader("Elige una imagen...", type=["jpg", "jpeg", "png"])
+if uploaded_file is not None:
+    st.image(uploaded_file, caption='Imagen subida.', use_column_width=True)
+    # Convertir el archivo subido en un objeto de imagen de Pillow
+    image = Image.open(uploaded_file)
 
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            error_message = "No se ha seleccionado ningún archivo."
-            return render_template('index.html', error_message=error_message)
+    # Escribir el prompt
+    prompt = st.text_input("Describe la profesión o vestimenta deseada (ej: 'un astronauta con un traje espacial')", "un astronauta con un traje espacial")
 
-        file = request.files['file']
-        profession = request.form.get('profession', 'astronauta').strip()
+    # Botón para generar la imagen
+    if st.button("Generar nueva imagen"):
+        if prompt and image:
+            with st.spinner("Generando tu nueva imagen..."):
+                try:
+                    # Enviar la imagen y el prompt al modelo
+                    # El prompt se envía como una lista que contiene el texto y la imagen
+                    response = model.generate_content([prompt, image])
 
-        if not profession:
-            error_message = "Por favor, ingresa una profesión."
-            return render_template('index.html', error_message=error_message)
-            
-        if file.filename == '':
-            error_message = "No se ha seleccionado ningún archivo."
-            return render_template('index.html', error_message=error_message)
-            
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            original_image_url = url_for('uploaded_file', filename=filename)
+                    # Mostrar la respuesta del modelo (texto que describe la nueva imagen)
+                    st.success("¡Imagen generada exitosamente!")
+                    st.write("Descripción de la nueva imagen:")
+                    st.write(response.text)
 
-            try:
-                # Envía la imagen y el prompt al servidor de Colab
-                with open(filepath, 'rb') as f:
-                    files = {'file': (file.filename, f.read(), file.content_type)}
-                    data = {'profession': profession}
-                    
-                    response = requests.post(COLAB_API_URL, files=files, data=data)
-                    response.raise_for_status() # Lanza un error si la respuesta no es 200
-
-                    # Guarda la imagen binaria que recibimos del servidor de Colab
-                    img_filename = f"generated_{profession}_{os.urandom(8).hex()}.png"
-                    image_path = os.path.join(app.config['UPLOAD_FOLDER'], img_filename)
-                    with open(image_path, 'wb') as img_file:
-                        img_file.write(response.content)
-                    
-                    generated_image_url = url_for('uploaded_file', filename=img_filename)
-
-            except requests.exceptions.RequestException as e:
-                print(f"Error al conectar con el servidor de Colab: {e}")
-                error_message = f"Error al conectar con el servidor de Colab: {e}"
-            except Exception as e:
-                print(f"Error al procesar la imagen: {e}")
-                error_message = f"Ocurrió un error al procesar la imagen: {e}"
-
-    return render_template('index.html', generated_image_url=generated_image_url, original_image_url=original_image_url, error_message=error_message)
-
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-if __name__ == '__main__':
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
-    app.run(debug=True)
+                    # Nota: La API de Gemini 2.0 Flash también devuelve texto, no una imagen.
+                    # El modelo te devolverá una descripción detallada de cómo se vería la nueva imagen.
+                except Exception as e:
+                    st.error(f"Ocurrió un error: {e}")
+                    st.error("Asegúrate de que la API Key es correcta y que la descripción no es demasiado compleja para el modelo.")
+        else:
+            st.warning("Por favor, sube una imagen y escribe un prompt.")
